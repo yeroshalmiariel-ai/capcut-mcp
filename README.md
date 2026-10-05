@@ -51,32 +51,46 @@ This mode only accepts connections from your own computer and only requests addr
 tunnel in front of it.** claude.ai connectors run in the cloud and can't reach `127.0.0.1`; use the
 remote mode below for those.
 
-## Get a URL (remote connector, e.g. claude.ai)
+## Get a URL with sign-in (claude.ai connector)
 
-By default the server talks over stdio. To get a URL, run it in HTTP mode **on the computer that has
-CapCut** and expose it with a tunnel:
+claude.ai connectors run in the cloud, so the server must be reachable from the internet. Sign-in mode
+protects it with a password login page (OAuth): claude.ai sends you to your own server's login page,
+and only gets access after you enter the password. Run it **on the computer that has CapCut**:
 
 ```bash
-# 1. pick a long random secret and start the server
-export CAPCUT_DRAFTS_DIR="/path/to/com.lveditor.draft"
-export CAPCUT_MCP_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-capcut-mcp --http --port 8000
-# prints: capcut-mcp listening on http://127.0.0.1:8000/<secret>/mcp
-
-# 2. in a second terminal, expose it (either one)
+# 1. expose a local port with a tunnel and note the https address it prints (either one)
 cloudflared tunnel --url http://127.0.0.1:8000
 ngrok http 8000
+
+# 2. in another terminal, start the server with that address and a password of your choice
+export CAPCUT_DRAFTS_DIR="/path/to/com.lveditor.draft"
+export CAPCUT_MCP_PASSWORD="choose-a-long-password"
+capcut-mcp --http --port 8000 --public-url https://YOUR-TUNNEL-ADDRESS
+# prints: Connector URL: https://YOUR-TUNNEL-ADDRESS/mcp
 ```
 
-Your connector URL is the tunnel's `https://...` address plus `/<secret>/mcp`, for example
-`https://example.trycloudflare.com/<secret>/mcp`. In claude.ai go to Settings -> Connectors -> Add
-custom connector and paste it.
+In claude.ai go to Settings -> Connectors -> Add custom connector, paste the connector URL, and
+connect. You'll be sent to the login page; enter your password and you're done.
 
-**Security:** the secret in the URL is the only protection. Anyone who has the URL can create, edit and
-overwrite drafts in your drafts folder, so treat it like a password, don't share it, and stop the
-tunnel when you're done. The server refuses secrets shorter than 16 characters and returns 404 for any
-other path. Free tunnel URLs usually change on every restart, so you'll need to update the connector.
-HTTP mode is tested with `mcp` 2.x.
+How it's protected:
+- Nothing works without signing in: the MCP endpoint answers 401 to anyone without a token.
+- The password is compared in constant time; after 10 wrong attempts in 10 minutes, sign-in is
+  blocked for the rest of that window (so someone guessing can lock you out briefly).
+- Tokens expire after an hour and are refreshed automatically; authorization codes work once.
+- Apps can only register redirect addresses on `claude.ai`, `claude.com` or `localhost`, so a
+  malicious link can't send your login to someone else's site. Add more with `--allow-redirect-host`.
+- If you don't set a password, one is generated and printed when the server starts.
+
+Limits: use a long, unique password and keep the tunnel closed when you're not using it. Sessions are
+kept in memory, so restarting the server signs you out. Free tunnel addresses usually change on every
+restart, so you'll need to update the connector URL and `--public-url`. Sign-in mode is tested with
+`mcp` 2.x.
+
+### Simpler alternative: secret in the URL
+
+If you'd rather not use a login page, `capcut-mcp --http --port 8000` serves the connector at
+`<tunnel address>/<secret>/mcp`, where the secret comes from `CAPCUT_MCP_SECRET` (16+ characters, or one
+is generated). Anyone who learns the full URL has full access, so sign-in mode is the better choice.
 
 ## Tools
 
