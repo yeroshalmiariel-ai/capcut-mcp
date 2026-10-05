@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "capcut": {
+      "command": "capcut-mcp",
+      "env": {
+        "CAPCUT_DRAFTS_DIR": "/path/to/CapCut/User Data/Projects/com.lveditor.draft"
+      }
+    }
+  }
+}

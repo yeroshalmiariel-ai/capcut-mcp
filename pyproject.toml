@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "capcut-mcp"
+version = "0.1.0"
+description = "MCP server that builds and edits CapCut draft projects (clips, audio, text, subtitles, transitions, keyframes)."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+    "mcp>=1.2",
+    "pyJianYingDraft",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+capcut-mcp = "capcut_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/capcut_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
