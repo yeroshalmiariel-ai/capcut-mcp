@@ -138,3 +138,18 @@ def test_server_tools_registered():
              "add_keyframe", "list_effects", "describe_draft", "save_draft"]
     for name in tools:
         assert callable(getattr(server, name)), name
+
+
+@pytest.mark.parametrize("bad", ["short", "has/slash_0123456789abcdef", ""])
+def test_http_app_rejects_weak_secret(bad):
+    from capcut_mcp.server import build_http_app
+
+    with pytest.raises(ValueError):
+        build_http_app(bad)
+
+
+def test_http_app_builds_with_good_secret():
+    from capcut_mcp.server import build_http_app
+
+    app = build_http_app("a-long-random-secret-0123456789")
+    assert app is not None

@@ -10,7 +10,7 @@ projects: video/image clips, audio, text, SRT subtitles, transitions, animations
 ## Install
 
 ```bash
-git clone https://github.com/<you>/capcut-mcp
+git clone https://github.com/yeroshalmiariel-ai/capcut-mcp
 cd capcut-mcp
 pip install -e .
 ```
@@ -35,6 +35,33 @@ claude mcp add capcut -e CAPCUT_DRAFTS_DIR="/path/to/com.lveditor.draft" -- capc
 ```
 
 **Claude Desktop / other clients** — see [`mcp.json.example`](mcp.json.example).
+
+## Get a URL (remote connector, e.g. claude.ai)
+
+By default the server talks over stdio. To get a URL, run it in HTTP mode **on the computer that has
+CapCut** and expose it with a tunnel:
+
+```bash
+# 1. pick a long random secret and start the server
+export CAPCUT_DRAFTS_DIR="/path/to/com.lveditor.draft"
+export CAPCUT_MCP_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+capcut-mcp --http --port 8000
+# prints: capcut-mcp listening on http://127.0.0.1:8000/<secret>/mcp
+
+# 2. in a second terminal, expose it (either one)
+cloudflared tunnel --url http://127.0.0.1:8000
+ngrok http 8000
+```
+
+Your connector URL is the tunnel's `https://...` address plus `/<secret>/mcp`, for example
+`https://example.trycloudflare.com/<secret>/mcp`. In claude.ai go to Settings -> Connectors -> Add
+custom connector and paste it.
+
+**Security:** the secret in the URL is the only protection. Anyone who has the URL can create, edit and
+overwrite drafts in your drafts folder, so treat it like a password, don't share it, and stop the
+tunnel when you're done. The server refuses secrets shorter than 16 characters and returns 404 for any
+other path. Free tunnel URLs usually change on every restart, so you'll need to update the connector.
+HTTP mode is tested with `mcp` 2.x.
 
 ## Tools
 

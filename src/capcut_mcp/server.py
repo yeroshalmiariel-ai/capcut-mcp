@@ -154,8 +154,79 @@ def save_draft(draft: str) -> str:
     return _run(manager().save, draft)
 
 
-def main() -> None:
-    mcp.run(transport="stdio")
+MIN_SECRET_LENGTH = 16
+
+
+def build_http_app(secret: str):
+    """ASGI app serving the MCP endpoint at /<secret>/mcp (everything else is a 404).
+
+    The secret in the path is the only access control, so it must be long and random.
+    """
+    from starlette.applications import Starlette
+    from starlette.routing import Mount
+
+    if len(secret) < MIN_SECRET_LENGTH or "/" in secret:
+        raise ValueError(
+            f"The secret must be at least {MIN_SECRET_LENGTH} characters and contain no '/'.")
+
+    try:  # mcp >= 2.0
+        from mcp.server.transport_security import TransportSecuritySettings
+
+        # The default host check only allows localhost, which would reject tunnel hostnames.
+        inner = mcp.streamable_http_app(
+            transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False))
+    except TypeError:  # mcp 1.x: configured through settings
+        from mcp.server.transport_security import TransportSecuritySettings
+
+        mcp.settings.transport_security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=False)
+        inner = mcp.streamable_http_app()
+
+    return Starlette(
+        routes=[Mount(f"/{secret}", app=inner)],
+        lifespan=inner.router.lifespan_context,
+    )
+
+
+def main(argv: Optional[list] = None) -> None:
+    import argparse
+    import os
+    import secrets
+    import sys
+
+    parser = argparse.ArgumentParser(
+        prog="capcut-mcp", description="MCP server for building CapCut draft projects.")
+    parser.add_argument("--http", action="store_true",
+                        help="serve over HTTP instead of stdio (for remote connectors via a tunnel)")
+    parser.add_argument("--host", default="127.0.0.1", help="HTTP bind address (default 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=8000, help="HTTP port (default 8000)")
+    parser.add_argument("--secret", default=os.environ.get("CAPCUT_MCP_SECRET"),
+                        help="secret path segment protecting the URL "
+                             "(default: $CAPCUT_MCP_SECRET, or a random one is generated)")
+    args = parser.parse_args(argv)
+
+    if not args.http:
+        mcp.run(transport="stdio")
+        return
+
+    import uvicorn
+
+    secret = args.secret
+    generated = secret is None
+    if generated:
+        secret = secrets.token_urlsafe(32)
+    try:
+        app = build_http_app(secret)
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    print(f"capcut-mcp listening on http://{args.host}:{args.port}/{secret}/mcp", file=sys.stderr)
+    print("Anyone with this URL can create and edit drafts on this computer. Keep it private.",
+          file=sys.stderr)
+    if generated:
+        print("This secret was generated for this run; set CAPCUT_MCP_SECRET to keep the same "
+              "URL across restarts.", file=sys.stderr)
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 
 if __name__ == "__main__":
