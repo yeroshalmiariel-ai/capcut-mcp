@@ -188,6 +188,19 @@ def build_http_app(secret: str):
     )
 
 
+LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
+
+
+def build_local_app():
+    """ASGI app serving /mcp with no secret, for use on this computer only.
+
+    The SDK's default host check stays on, so only requests addressed to localhost are
+    accepted. A tunnel pointing at this server will be rejected unless it rewrites the
+    Host header, so do not tunnel this mode.
+    """
+    return mcp.streamable_http_app()
+
+
 def main(argv: Optional[list] = None) -> None:
     import argparse
     import os
@@ -203,13 +216,29 @@ def main(argv: Optional[list] = None) -> None:
     parser.add_argument("--secret", default=os.environ.get("CAPCUT_MCP_SECRET"),
                         help="secret path segment protecting the URL "
                              "(default: $CAPCUT_MCP_SECRET, or a random one is generated)")
+    parser.add_argument("--no-secret", action="store_true",
+                        help="HTTP mode without a secret, reachable from this computer only "
+                             "(binds to localhost; do not put a tunnel in front of it)")
     args = parser.parse_args(argv)
 
+    if args.no_secret and not args.http:
+        parser.error("--no-secret only applies together with --http")
     if not args.http:
         mcp.run(transport="stdio")
         return
 
     import uvicorn
+
+    if args.no_secret:
+        if args.host not in LOOPBACK_HOSTS:
+            parser.error("--no-secret only works with a localhost --host (127.0.0.1, localhost or ::1)")
+        if args.secret:
+            parser.error("--no-secret cannot be combined with --secret / CAPCUT_MCP_SECRET")
+        print(f"capcut-mcp (local only) listening on http://{args.host}:{args.port}/mcp",
+              file=sys.stderr)
+        print("Reachable from this computer only. Don't expose it with a tunnel.", file=sys.stderr)
+        uvicorn.run(build_local_app(), host=args.host, port=args.port, log_level="warning")
+        return
 
     secret = args.secret
     generated = secret is None

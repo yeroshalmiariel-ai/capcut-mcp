@@ -36,6 +36,21 @@ claude mcp add capcut -e CAPCUT_DRAFTS_DIR="/path/to/com.lveditor.draft" -- capc
 
 **Claude Desktop / other clients** — see [`mcp.json.example`](mcp.json.example).
 
+## Local URL (no secret)
+
+For a client on the same computer that wants a URL instead of launching a subprocess (for example
+Claude Code), run the server in local-only mode:
+
+```bash
+capcut-mcp --http --no-secret --port 8000
+claude mcp add --transport http capcut http://127.0.0.1:8000/mcp
+```
+
+This mode only accepts connections from your own computer and only requests addressed to
+`localhost`. It refuses to start on any other `--host` and can't be combined with a secret. **Don't put a
+tunnel in front of it.** claude.ai connectors run in the cloud and can't reach `127.0.0.1`; use the
+remote mode below for those.
+
 ## Get a URL (remote connector, e.g. claude.ai)
 
 By default the server talks over stdio. To get a URL, run it in HTTP mode **on the computer that has
